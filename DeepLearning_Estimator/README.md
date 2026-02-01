@@ -13,4 +13,4 @@ with very cheap sensors!!!.
 These signals can potentially be used to infer benzene
 concentration indirectly.
 
-Here I built a deep learning model that estimates Benzene concentration from corelated gases.
+Here I built a deep learning model that estimates Benzene concentration from corelated gas sensor measurments.
