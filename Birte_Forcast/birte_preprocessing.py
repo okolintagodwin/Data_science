@@ -11,7 +11,6 @@ Environment:
   PROGAI_TOKEN must be set in your environment (ProgAI API token).
 """
 
-from email.mime import base
 import os
 import sys
 import json
@@ -44,7 +43,7 @@ HEADERS = {
 # Utilities
 # ----------------------
 
-def summarize_df(df: pd.DataFrame, n_sample: int = 20) -> Dict[str, Any]:
+def summarize_df(df: pd.DataFrame, n_sample: int = 30) -> Dict[str, Any]:
     """Return a compact summary of the dataframe for the LLM prompt."""
     samples = df.head(n_sample).fillna("").to_dict(orient="records")
     cols = []
@@ -137,17 +136,124 @@ Return your response strictly as JSON, following this schema:
   "futureexpert_config": {{
      "time_column": "<column name or null>",
      "value_column": "<main numeric column or null>",
-     "frequency": "<e.g. 'yearly', 'quarterly', 'monthly', 'weekly', 'daily', 'hourly' or 'halfhourly' 
+     "frequency": "<e.g., D, W, M or null>",
      "covariates": ["colA", "colB"]
   }}
 }}
 
 Guidelines:
+- Propose transformations that are likely to improve forecasting performance.
+-specicy details for each transformation (e.g. column names, date formats, resampling rules).
+-Please don't miss important transformations, but also avoid unnecessary ones. Be concise.
+-Please don't miss column splitting if you see multi-value columns!.
 - Always return syntactically valid JSON.
 - Include robust transformations such as trimming spaces, deduplication, parsing dates, splitting multi-value columns, etc.
 - If uncertain, use "ask_user" and include specific questions.
 - Please be smart, only ask questions if it is really necessary. 
 - Avoid plain text output — only JSON.
+-Suggest "fill_na" instead of resampling and always provide filling strategies.
+-Please be very smart with the filling strategy, don't suggest constant if ffill or bfill would work well, Use ffill for grouped empty rows!. 
+-Only drop columns when it is Absolutely necessary.                                       
+
+Each transformation type MUST follow this exact structure:
+
+1. rename_column
+{{
+  "type": "rename_column",
+  "details": {{
+    "file": "<filename or null>",
+    "mapping": {{
+      "<old_name>": "<new_name>"
+    }}
+  }}
+}}
+
+2. parse_dates
+{{
+  "type": "parse_dates",
+  "details": {{
+    "file": "<filename or null>",
+    "column": "<column_name>",
+    "format": "<optional date format string or null>"
+  }}
+}}
+
+3. split_column
+{{
+  "type": "split_column",
+  "details": {{
+    "file": "<filename or null>",
+    "column": "<column_name>",
+    "delimiter": "<delimiter or null>",
+    "new_columns": ["col1", "col2", "..."],
+    "keep_original": false
+  }}
+}}
+
+4. fill_na
+{{
+  "type": "fill_na",
+  "details": {{
+    "file": "<filename or null>",
+    "columns": ["col1", "col2"],
+    "strategy": "ffill" | "bfill" | "zero" | "<constant value>"
+  }}
+}}
+
+5. drop_columns
+{{
+  "type": "drop_columns",
+  "details": {{
+    "file": "<filename or null>",
+    "columns": ["col1", "col2"]
+  }}
+}}
+
+6. cast_type
+{{
+  "type": "cast_type",
+  "details": {{
+    "file": "<filename or null>",
+    "columns": {{
+      "col1": "float64",
+      "col2": "int64"
+    }}
+  }}
+}}
+
+7. set_index
+{{
+  "type": "set_index",
+  "details": {{
+    "file": "<filename or null>",
+    "column": "<column_name>"
+  }}
+}}
+
+8. standardize_headers
+{{
+  "type": "standardize_headers",
+  "details": {{
+    "file": "<filename or null>"
+  }}
+}}
+
+9. deduplicate_rows
+{{
+  "type": "deduplicate_rows",
+  "details": {{
+    "file": "<filename or null>"
+  }}
+}}
+
+10. strip_whitespace
+{{
+  "type": "strip_whitespace",
+  "details": {{
+    "file": "<filename or null>"
+  }}
+}}
+
 Input summary:
 {summary_json}
 """).strip()
@@ -207,7 +313,7 @@ def apply_transformations(df_map: Dict[str, pd.DataFrame], plan: Dict[str, Any])
 
                     dfs[fname][col] = parsed
                     print(f"[parse_dates] {fname}.{col} parsed to datetime")
-            
+                
         
 
             elif ttype == "split_column":
@@ -335,6 +441,178 @@ def apply_transformations(df_map: Dict[str, pd.DataFrame], plan: Dict[str, Any])
 
     return dfs
 
+#-----------------------
+#File Loader
+#-----------------------
+
+
+
+
+def robust_read_delimited_file(path):
+    """
+    Robust CSV/TSV/pipe reader with:
+    - delimiter detection
+    - decimal detection
+    - encoding fallback
+    """
+
+    # --- Read sample ---
+    with open(path, "rb") as f:
+        raw = f.read(10000)
+
+    sample = raw.decode("utf-8", errors="ignore")
+
+    # --- Detect delimiter using Sniffer ---
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=[",", ";", "|", "\t"])
+        delimiter = dialect.delimiter
+    except Exception:
+        # fallback frequency detection
+        delimiters = [",", ";", "|", "\t"]
+        counts = {d: sample.count(d) for d in delimiters}
+        delimiter = max(counts, key=counts.get)
+
+    # --- Detect decimal ---
+    if delimiter != "," and re.search(r"\d+,\d+", sample):
+        decimal = ","
+    else:
+        decimal = "."
+
+    print(f"[robust_read] delimiter='{delimiter}' decimal='{decimal}'")
+
+    # --- Encoding fallback ---
+    encodings = ["utf-8", "latin1", "cp1252"]
+
+    for enc in encodings:
+        try:
+            df = pd.read_csv(
+                path,
+                sep=delimiter,
+                decimal=decimal,
+                encoding=enc,
+                engine="python"
+            )
+            print(f"[robust_read] encoding='{enc}'")
+            return df
+        except Exception:
+            continue
+
+    raise ValueError("Failed to read delimited file.")
+
+
+
+
+
+def robust_load_file(path):
+    """
+    Universal file loader for:
+    - Excel (.xlsx, .xls, .xlsm, .ods)
+    - CSV
+    - TSV
+    - Pipe separated
+    - TXT delimited files
+
+    Returns:
+        dict {file_key: DataFrame}
+    """
+
+    ext = os.path.splitext(path)[1].lower()
+    basename = os.path.basename(path)
+    result = {}
+
+    # =========================
+    # EXCEL FILES
+    # =========================
+    if ext in [".xlsx", ".xls", ".xlsm", ".ods"]:
+
+        # Try safe engine fallback
+        excel_engines = [None, "openpyxl", "xlrd"]
+
+        for engine in excel_engines:
+            try:
+                sheets = pd.read_excel(
+                    path,
+                    sheet_name=None,
+                    engine=engine,
+                    dtype=str
+                )
+                break
+            except Exception:
+                continue
+        else:
+            raise ValueError("Could not read Excel file with available engines.")
+
+        for sheet_name, sheet_df in sheets.items():
+
+            # Drop completely empty rows/columns
+            sheet_df = sheet_df.dropna(how="all").dropna(axis=1, how="all")
+
+            key = f"{basename}::{sheet_name}"
+            result[key] = sheet_df
+
+        return result
+
+    # =========================
+    # DELIMITED FILES
+    # =========================
+    elif ext in [".csv", ".tsv", ".txt"]:
+
+        df = robust_read_delimited_file(path)
+
+        # Drop fully empty rows/cols
+        df = df.dropna(how="all").dropna(axis=1, how="all")
+
+        result[path] = df
+        return result
+
+    else:
+        raise ValueError(f"Unsupported file type: {ext}")
+
+
+
+def auto_detect_and_clean_value_column(df: pd.DataFrame, threshold: float = 0.7):
+    """
+    Detects columns that contain values like 'DMD:167.0'
+    or similar prefix:number patterns, strips prefixes,
+    converts to float, and returns the best candidate column.
+    
+    Returns:
+        (df, detected_value_column or None)
+    """
+
+    numeric_pattern = re.compile(r":\s*([-+]?\d*\.?\d+)")
+    candidates = []
+
+    for col in df.columns:
+
+        if df[col].dtype != "object":
+            continue
+
+        # Try extract numeric part
+        extracted = df[col].astype(str).str.extract(numeric_pattern)[0]
+
+        match_ratio = extracted.notna().mean()
+
+        if match_ratio >= threshold:
+            converted = pd.to_numeric(extracted, errors="coerce")
+
+            # Only accept if conversion meaningful
+            if converted.notna().mean() >= threshold:
+                df[col] = converted
+                candidates.append(col)
+                print(f"[value_detect] Converted column '{col}' (match_ratio={match_ratio:.2f})")
+
+    # If multiple candidates, pick best
+    if candidates:
+        # Heuristic: highest variance usually = value column
+        variances = {col: df[col].var() for col in candidates}
+        best_col = max(variances, key=variances.get)
+        print(f"[value_detect] Selected value column: {best_col}")
+        return df, best_col
+
+    return df, None
+
+
 
 # ----------------------
 # Main Orchestration 
@@ -348,19 +626,16 @@ def prepare_data(files: List[str], out_dir: str, answers: Optional[List[Dict[str
     """
     df_map = {}
     for f in files:
-        ext = os.path.splitext(f)[1].lower()
-        if ext in [".xlsx", ".xls", ".xlsm", ".ods"]:
-            sheets = pd.read_excel(f, sheet_name=None, dtype=str)
-            for sheet_name, sheet_df in sheets.items():
-                key = f"{os.path.basename(f)}::{sheet_name}"
-                df_map[key] = sheet_df
-                print(f"Loaded {f} [{sheet_name}]: {sheet_df.shape[0]} rows, {sheet_df.shape[1]} cols")
-        elif ext == ".csv":
-            df = pd.read_csv(f, sep=None, engine="python", dtype=str)
-            df_map[f] = df
-            print(f"Loaded {f}: {df.shape[0]} rows, {df.shape[1]} cols")
-        else:
-            print(f"Skipping unsupported file type: {f}")
+        try:
+            loaded = robust_load_file(f)
+
+            for key, df in loaded.items():
+                df_map[key] = df
+                print(f"Loaded {key}: {df.shape[0]} rows, {df.shape[1]} cols")
+
+        except Exception as e:
+            print(f"[ERROR] Failed loading {f}: {e}")
+
 
     summary = {f: summarize_df(df) for f, df in df_map.items()}
     summary_json = json.dumps(summary, indent=2)
@@ -390,46 +665,54 @@ def prepare_data(files: List[str], out_dir: str, answers: Optional[List[Dict[str
     updated = apply_transformations(df_map, plan)
 
 
-    saved_files = []
-    os.makedirs(out_dir, exist_ok=True) 
+    detected_values = {}
+
     for fname, df in updated.items():
-        base, _ = os.path.splitext(os.path.basename(fname))
-        safe_name = base.replace("::", "__").replace(":", "_")
+        df, value_col = auto_detect_and_clean_value_column(df)
+        updated[fname] = df
+        if value_col:
+            detected_values[fname] = value_col
+
+
+
+    os.makedirs(out_dir, exist_ok=True)
+    for fname, df in updated.items():
+        safe_name = os.path.basename(fname).replace("::", "__").replace(":", "_")
         outp = os.path.join(out_dir, f"cleaned_{safe_name}.csv")
         df.reset_index().to_csv(outp, index=False)
-        saved_files.append(outp)
         print(f"Saved cleaned: {outp}")
 
 
-    PANDAS_FREQ_TO_HUMAN = {
-    "MS": "MONTHLY",
-    "M": "MONTHLY",
-    "QS": "QUARTERLY",
-    "Q": "QUARTERLY",
-    "YS": "YEARLY",
-    "Y": "YEARLY",
-    "D": "DAILY",
-    "H": "HOURLY",
-    "30T": "HALFHOURLY",
-    }
 
-    fx_cfg = plan.get("futureexpert_config", {}).copy()
-    freq = fx_cfg.get("frequency")
-    if freq in PANDAS_FREQ_TO_HUMAN:
-        fx_cfg["frequency"] = PANDAS_FREQ_TO_HUMAN[freq]
+
+    future_cfg = plan.get("futureexpert_config", {})
+
+    # If LLM did not specify value column → auto inject
+    if not future_cfg.get("value_column"):
+        if detected_values:
+            #   Take first detected (single dataset case)
+            future_cfg["value_column"] = list(detected_values.values())[0]
+            print(f"[futureexpert] Auto-assigned value_column: {future_cfg['value_column']}")
+
 
     cfg = {
     "files": list(updated.keys()),
-    "futureexpert_config": fx_cfg,
+    "futureexpert_config": future_cfg,
     "explanation": plan.get("explanation", "")
-    }
+}
+
+
+
+
+
 
     cfg_path = os.path.join(out_dir, "futureexpert_checkin_config.json")
     with open(cfg_path, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2)
     print(f"Config saved: {cfg_path}")
 
-    return {"status": "success", "outputs": saved_files, "config": cfg}
+    return {"status": "success", "outputs": list(updated.keys()), "config": cfg}
+
 
 
 # ----------------------
@@ -451,4 +734,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()
