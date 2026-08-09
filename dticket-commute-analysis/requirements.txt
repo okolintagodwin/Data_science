@@ -1,0 +1,9 @@
+# Deutschlandticket commute analysis — tested with these versions
+pandas>=2.0
+numpy>=1.24
+matplotlib>=3.7
+networkx>=3.0
+folium>=0.15
+scikit-learn>=1.3
+notebook>=7.0
+nbformat>=5.9

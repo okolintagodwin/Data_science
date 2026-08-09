@@ -1,0 +1,12 @@
+factor,effect_pp_per_sd,direction
+Car available,-17.65,decreases
+PT time ÷ car time,-9.98,decreases
+Green attitude,5.66,increases
+Distance to site (km),5.13,increases
+Shift worker,-2.86,decreases
+Days on site per week,1.76,increases
+Young children at home,-1.72,decreases
+Field role (needs car),-1.0,decreases
+Number of interchanges,-0.9,decreases
+Walk/ride to station (km),0.84,increases
+Age,-0.29,decreases

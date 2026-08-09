@@ -1,0 +1,47 @@
+==============================================================================
+  DEUTSCHLANDTICKET COMMUTE POTENTIAL — J&J MEDICAL GMBH, NORDERSTEDT
+  Robert-Koch-Straße 1, 22851 Norderstedt
+  1,200 synthetic employees · ticket EUR 63.00/month (2026)
+==============================================================================
+
+  DOOR-TO-DOOR PUBLIC TRANSPORT COMMUTE TIME
+    within 30 min           14.3%   ( 172 employees)
+    within 45 min           24.4%   ( 293 employees)
+    within 60 min           44.7%   ( 536 employees)
+    over 60 min             55.3%   ( 664 employees)
+    median PT 63 min  vs  median car 27 min   (2.3x)
+
+  DEUTSCHLANDTICKET ADOPTION POTENTIAL
+    no employer support     42.6%   ( 511 ticket holders)
+    JobTicket, 25% subsidy  54.7%   ( 656 ticket holders)
+    high-potential users    464 employees (P >= 60%)
+    would commute by PT     16.7%   (59 car commuters switch)
+
+  SUSTAINABILITY (JobTicket scenario)
+    car-km avoided         432,913 km/year
+    CO2 avoided            37 tonnes/year
+
+  STRONGEST CONNECTIVITY   Hamburg-Langenhorn, Hamburg-Fuhlsbüttel, Hamburg-Rotherbaum, Hamburg-Winterhude
+  WEAKEST CONNECTIVITY     Hamburg-Volksdorf/Duvenstedt, Ahrensburg, Hamburg-Rahlstedt, Halstenbek/Rellingen
+
+  KEY FACTORS (change in adoption, pp per 1 SD move in the factor)
+    Car available                   -17.6 pp  (decreases)
+    PT time ÷ car time              -10.0 pp  (decreases)
+    Green attitude                   +5.7 pp  (increases)
+    Distance to site (km)            +5.1 pp  (increases)
+    Shift worker                     -2.9 pp  (decreases)
+
+  RECOMMENDATION
+    1. Offer the DeutschlandJobTicket at the 25% subsidy (employee pays
+       EUR 44.10). It is cheap, tax-free under S3 Nr.15 EStG,
+       and lifts ticket holding from 43% to 55%.
+    2. Fix the last mile. A shuttle from U1 Ochsenzoll/Garstedt buys more
+       modal shift than making the ticket free, because time — not price —
+       is the binding constraint at this site.
+    3. Target Hamburg-Langenhorn, Hamburg-Fuhlsbüttel, Hamburg-Rotherbaum first.
+       Do not spend campaign budget on Hamburg-Volksdorf/Duvenstedt, Ahrensburg, Hamburg-Rahlstedt,
+       where the journey cannot compete regardless of price.
+    4. Price the parking. Free on-site parking is the largest single
+       subsidy the site currently pays, and it works against every other
+       measure in this list.
+==============================================================================

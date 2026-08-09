@@ -1,0 +1,5 @@
+commute_band,employees,expected_adopters,adoption_rate_pct,median_pt_min,median_car_min,share_of_employees_pct
+≤ 30 min,169,67.3,39.8,24.2,12.8,14.1
+31–45 min,123,48.8,39.6,35.3,16.1,10.2
+46–60 min,243,143.0,58.9,53.6,28.0,20.2
+> 60 min,665,251.8,37.9,79.9,29.3,55.4
