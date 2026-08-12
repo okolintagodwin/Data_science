@@ -70,7 +70,6 @@ calibrate_network.py    fits network speeds to published journey times
 src/commute.py          door-to-door journey builder + car baseline
 src/adoption.py         choice model, calibration, drivers, sensitivity
 src/viz.py              charts and the Folium map
-build_notebook.py       regenerates the notebook from source
 data/                   generated synthetic employees and commutes (CSV)
 outputs/                summary report, CSVs, figures, interactive map
 ```
